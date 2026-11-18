@@ -2,6 +2,7 @@
   "name": "t3tap",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Stream a T3 Code thread as it happens.",
   "bin": {

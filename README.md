@@ -109,3 +109,7 @@ bun run typecheck
 ```
 
 `src/watcher.ts` reads and classifies items. `src/cli.ts` has options, filters and help. `src/format.ts` prints events.
+
+## License
+
+[MIT](LICENSE)
