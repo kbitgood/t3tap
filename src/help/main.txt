@@ -1,0 +1,26 @@
+t3tap {VERSION}: stream a T3 Code thread as it happens.
+
+USAGE
+  t3tap <command> [options]
+  t3tap <command> --help
+
+COMMANDS
+  watch <thread>   Follow one T3 thread and print its messages, tool calls and
+                   thinking as they arrive. Run "t3tap watch --help" for all
+                   options and examples.
+  help [command]   Show help for t3tap or for one command.
+
+GLOBAL OPTIONS
+  -h, --help       Show this help. Every command also accepts --help.
+  -v, --version    Print the version.
+
+WHAT IT READS
+  t3tap reads T3 Code's local database (~/.t3/userdata/statev2.sqlite)
+  read-only. It never writes to it and never sends anything to a thread.
+  T3 stores Claude, Codex, Pi and other providers in one format, so the same
+  command works for every thread, including threads that switch provider.
+
+QUICK START
+  t3tap watch <thread-id>                 # user prompts and final answers
+  t3tap watch <thread-id> --tools         # ...plus tool calls, without output
+  t3tap watch <thread-id> --all --last 20 # everything, starting 20 events back
