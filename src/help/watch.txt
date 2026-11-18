@@ -1,0 +1,167 @@
+t3tap watch: follow one T3 Code thread and print what happens in it.
+
+USAGE
+  t3tap watch <thread> [options]
+
+ARGUMENTS
+  <thread>   Which thread to follow. Any of:
+               - the full thread ID, e.g. a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+               - a unique prefix of at least 4 characters, e.g. a1b2c3d4
+               - any text that contains the ID, such as a T3 thread link
+               - "self": the thread this command runs in (from $T3CODE_THREAD_ID)
+             Inside a T3 agent the current thread ID is in $T3CODE_THREAD_ID.
+             The T3 tool t3_thread_list also lists thread IDs.
+
+WHAT IT PRINTS
+  Each thing that happens in the thread is an event with one kind:
+
+    user      A message from the person: a new prompt, a steer sent mid-turn,
+              or a queued message. Printed as soon as T3 records it.
+    final     The agent's finished answer: the last assistant message of a
+              turn. Printed when the turn ends, because only then is it known
+              to be the last one.
+    interim   Assistant messages written between tool calls, before the final
+              answer ("I'll check the config first..."). Printed once a later
+              tool call or message shows it was not the last one.
+    tool      A tool call: shell commands, MCP and built-in tools, file edits,
+              web searches, subagents. Shows the tool name and its input,
+              never its output. Printed when the call starts.
+    thinking  The agent's reasoning or reasoning summary, when the provider
+              exposes it. Printed when each block finishes. Cut to
+              --thinking-chars characters by default.
+    event     Everything else T3 records: errors, provider handoffs, context
+              compaction, approval requests, questions to the user,
+              interrupts, plan updates, notifications, system notices.
+    turn      A marker printed when a turn ends, with its status (completed,
+              interrupted, failed, cancelled). T3 calls a turn a "run".
+
+  Default kinds: user, final. Each option below adds kinds to that set.
+
+CHOOSING WHAT TO PRINT
+  --tools               Add tool calls (name and input, no output).
+  --thinking            Add thinking, each block cut to --thinking-chars.
+  --interim             Add assistant messages written between tool calls.
+  --events              Add other events (errors, handoffs, approvals...).
+  --turns               Add a marker at the end of each turn.
+  --all                 Add every kind.
+  --kinds <list>        Replace the default set with this comma-separated list,
+                        e.g. --kinds final or --kinds user,tool. The adding
+                        options above still add to it.
+
+CUSTOM FILTERS (applied after the kinds; an event must pass all of them)
+  --tool-name <regex>   Keep only tool calls whose tool name matches, e.g.
+                        --tool-name 'shell|Bash' or --tool-name '^mcp__'.
+                        Events of other kinds are not affected.
+  --match <regex>       Keep only events whose text matches. Case-insensitive.
+                        For tool calls the text is "name: input".
+  --exclude <regex>     Drop events whose text matches. Case-insensitive.
+                        Regexes use Rust syntax, which has no lookaround or
+                        backreferences.
+  --where <js>          A JavaScript expression over the event "e"; keep the
+                        event when it is truthy. Fields of e:
+                          e.kind      user|final|interim|tool|thinking|event|turn
+                          e.text      message text, or "name: input" for tools
+                          e.tool      {name, input} for tool calls, else undefined
+                          e.itemType  raw T3 type: user_message, assistant_message,
+                                      reasoning, command_execution, dynamic_tool,
+                                      file_change, web_search, subagent, error,
+                                      handoff, compaction, approval_request, ...
+                          e.status    completed, running, failed, waiting, ...
+                          e.run       turn number in the thread
+                          e.intent    for user messages: turn_start, steer, queued_turn
+                          e.provider  claudeAgent, codex, ... when known
+                          e.at        ISO 8601 time in UTC
+                        Examples:
+                          --where 'e.kind !== "tool" || e.tool.name === "shell"'
+                          --where 'e.text.length > 200'
+                          --where 'e.status === "failed"'
+                        Errors inside the expression count as false and are
+                        reported once on stderr.
+
+LENGTH LIMITS (0 means no limit; cut text ends with "… [+N chars]")
+  --thinking-chars <n>  Characters of each thinking block. Default 600.
+  --tool-chars <n>      Characters of each tool input. Default 300.
+  --max-chars <n>       Characters of any event's text. Default 0.
+
+WHERE TO START
+  (default)             Print only what happens from now on. If a turn is
+                        already running, its final answer is still printed
+                        when it ends.
+  --last <n>            First print the last n matching events, then follow.
+  --since <time>        First print matching events newer than <time>, then
+                        follow. <time> is ISO 8601 (2026-11-18T17:08:21Z) or
+                        an age like 90s, 10m, 2h, 1d. Use the "at" field of the
+                        last event you saw to resume without a gap.
+  --from-start          Print the whole thread first, then follow.
+
+WHEN TO STOP
+  (default)             Follow until interrupted (Ctrl+C or SIGTERM).
+  --no-follow           Print the starting events and exit. Combine with
+                        --last, --since or --from-start.
+  --exit-after-turn     Exit once the next turn of the thread ends (after its
+                        final answer is printed). Good for "tell me when the
+                        agent replies".
+
+OUTPUT
+  --format <fmt>        text  (default) Header line, then the text indented.
+                              Tool calls and short events fit on one line.
+                        line  One line per event; newlines become "\n".
+                        jsonl One JSON object per line with all fields above.
+                              Best for scripts and agents.
+  --utc                 Show times in UTC instead of local time.
+  --color / --no-color  Force colors on or off. Default: on for a terminal,
+                        off when piped or when NO_COLOR is set.
+  --quiet               Do not print the "watching ..." line on stderr.
+
+OTHER
+  --interval <ms>       How often to check the database. Default 500.
+  --db <path>           T3 database file. Default: $T3TAP_DB, else
+                        $T3CODE_HOME/userdata/statev2.sqlite, else
+                        ~/.t3/userdata/statev2.sqlite.
+  --allow-self          Allow following the thread this command runs in.
+                        Refused by default: an agent that reacts to its own
+                        output loops forever. --no-follow needs no override.
+  -h, --help            Show this help.
+
+EXAMPLES
+  Watch a thread like a chat log:
+    t3tap watch a1b2c3d4
+
+  Catch up on the last 10 exchanges, then keep following:
+    t3tap watch a1b2c3d4 --last 10
+
+  See what the agent is doing, not only what it says:
+    t3tap watch a1b2c3d4 --tools --interim
+
+  Everything, including thinking cut to 200 characters:
+    t3tap watch a1b2c3d4 --all --thinking-chars 200
+
+  Only shell commands, one line each:
+    t3tap watch a1b2c3d4 --kinds tool --tool-name shell --format line
+
+  Only failures and errors:
+    t3tap watch a1b2c3d4 --all --where 'e.status === "failed" || e.itemType === "error"'
+
+  Wait for the next answer, print it, exit:
+    t3tap watch a1b2c3d4 --kinds final --exit-after-turn
+
+  Feed a script or another agent:
+    t3tap watch a1b2c3d4 --format jsonl | jq -r 'select(.kind=="final") | .text'
+
+FOR AGENTS
+  - To get woken by each event, run this under a tool that turns output lines
+    into notifications (Claude Code's Monitor tool) or tail its output file
+    from a background process.
+  - Use --format jsonl or --format line so each event is one line and
+    nothing else is printed on stdout. Status and errors go to stderr.
+  - Keep output small: the default kinds are usually enough for a reviewer or
+    critic. Add --tools only when you need to see actions.
+  - When a watch is restarted (for example after a monitor times out), pass
+    --since <at of the last event you saw> so nothing is missed or repeated.
+  - Never follow your own thread with a watcher that replies to what it sees.
+
+EXIT CODES
+  0  stopped normally, or --no-follow / --exit-after-turn finished
+  1  database error
+  2  bad command line
+  3  thread not found, or the prefix matches more than one thread

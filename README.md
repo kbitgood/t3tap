@@ -15,14 +15,13 @@ I built it so one agent can watch another. A critic agent runs t3tap on the main
 
 ## Install
 
-You need [Bun](https://bun.sh) 1.1+ and T3 Code on the same machine. I have tested it only on macOS.
+You need a stable [Rust](https://rustup.rs) toolchain and T3 Code on the same machine. I have tested it only on macOS.
 
 ```sh
-git clone https://github.com/kbitgood/t3tap.git
-cd t3tap
-bun install
-ln -s "$PWD/src/cli.ts" ~/.local/bin/t3tap   # any folder on your PATH
+cargo install --git https://github.com/kbitgood/t3tap.git
 ```
+
+This puts `t3tap` in `~/.cargo/bin`. In a checkout, use `cargo install --path .`. The binary includes SQLite and the JavaScript engine for `--where`.
 
 ## Use
 
@@ -61,6 +60,8 @@ t3tap watch a1b2c3d4 --kinds tool --tool-name shell        # shell commands only
 t3tap watch a1b2c3d4 --all --match migration --exclude test
 t3tap watch a1b2c3d4 --all --where 'e.status === "failed"' # any JS expression
 ```
+
+`--where` runs in [QuickJS](https://bellard.org/quickjs/). Regexes use Rust syntax: no lookaround or backreferences.
 
 `--thinking-chars`, `--tool-chars` and `--max-chars` cut long text. Cut text ends with `… [+N chars]`.
 
@@ -104,11 +105,11 @@ t3tap holds each assistant message until a later step appears (`interim`) or the
 ## Development
 
 ```sh
-bun test            # tests use an in-memory copy of T3's tables
-bun run typecheck
+cargo test          # tests use an in-memory copy of T3's tables
+cargo clippy --all-targets
 ```
 
-`src/watcher.ts` reads and classifies items. `src/cli.ts` has options, filters and help. `src/format.ts` prints events.
+`src/watcher.rs` reads and classifies items. `src/cli.rs` has options, filters and the watch loop. `src/help/` has the help text. `src/format.rs` prints events. `src/where_expr.rs` runs `--where`.
 
 ## License
 
